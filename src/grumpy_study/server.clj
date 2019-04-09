@@ -21,13 +21,27 @@
     [:img.avatar {:src (str "/i/" (:author post) ".jpg")}]]
    [:div
     [:p [:span.author (:author post) ": "] (:body post)]
-    [:p.meta (:created post) "//" [:a {:href (str "/post/" (:id post))} "Link"]]]])
+    [:p.meta (:created post) "//" [:a {:href (str "/post/" (:id post))} "Ссылка"]]]])
+
+(rum/defc page [title & children]
+  [:html
+   [:head
+    [:meta {:http-equiv "Content-Type" :content "text-html; charset=UTF-8"}]
+    [:title title]
+    [:meta {:name "viewport" :content "width=device-width, initial-scale=1.0"}]]
+   [:body
+    [:header
+     [:h1 "Ворчание ягнят"]
+     [:p#site_subtitle "Это не текст, это ссылка. Не нажимайте на ссылку"]]
+    children]])
 
 (rum/defc index [posts]
-  [:html
-   [:body
-    (for [p posts]
-      (post p))]])
+  (page "Ворчание ягнят"
+        (for [p posts]
+          (post p))))
+
+(defn render-html [component]
+  (str "<!DOCTYPE html>\n" (rum/render-static-markup component)))
 
 (cj/defroutes routes
   (cj/GET "/" [:as req]
@@ -37,7 +51,16 @@
   (cj/POST "/write" [:as req]
     {:body "POST"}))
 
-(def app routes)
+(defn with-headers [handler headers]
+  (fn [request]
+    (some-> (handler request)
+            (update :headers merge headers))))
+
+(def app
+  (-> routes
+      (with-headers {"Content-Type" "text/html; charset=utf-8"
+                     "Cache-Control" "no-cache"
+                     "Expires" "-1"})))
 
 (defn -main [& args]
   (let [args-map (apply array-map args)
