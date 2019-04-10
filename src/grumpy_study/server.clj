@@ -3,7 +3,10 @@
    [rum.core :as rum]
    [immutant.web :as web]
    [compojure.core :as cj]
-   [compojure.route :as cjr]))
+   [compojure.route :as cjr])
+  (:import
+   [org.joda.time DateTime]
+   [org.joda.time.format DateTimeFormat]))
 
 (def posts
   [{:id "1"
@@ -15,13 +18,18 @@
     :author "freetonik"
     :body "some body 2"}])
 
+(def date-formatter (DateTimeFormat/forPattern "dd.MM.YYYY"))
+
+(defn render-date [inst]
+  (.print date-formatter (DateTime. inst)))
+
 (rum/defc post [post]
   [:.post
    [:.post_sidebar
     [:img.avatar {:src (str "/i/" (:author post) ".jpg")}]]
    [:div
     [:p [:span.author (:author post) ": "] (:body post)]
-    [:p.meta (:created post) "//" [:a {:href (str "/post/" (:id post))} "Ссылка"]]]])
+    [:p.meta (render-date (:created post)) " // " [:a {:href (str "/post/" (:id post))} "Ссылка"]]]])
 
 (rum/defc page [title & children]
   [:html
@@ -33,7 +41,34 @@
     [:header
      [:h1 "Ворчание ягнят"]
      [:p#site_subtitle "Это не текст, это ссылка. Не нажимайте на ссылку"]]
-    children]])
+    children
+    [:footer
+     [:a {:href "https://twitter.com/nikitonsky"} "Никита Прокопов"]
+     ", "
+     [:a {:href "https://twitter.com/freetonik"} "Рахим Давлеткалиев"]
+     ". 2019. All rights retarded"
+     [:br]
+     [:a {:href "/feed" :rel "alternate" :type "application/rss+xml"} "RSS"]]
+    [:script {:dangerouslySetInnerHTML {:__html
+                                        "
+window.onload = function() {
+  reloadSubtitle();
+  document.getElementById('site_subtitle').onclick = reloadSubtitle;
+}
+
+function reloadSubtitle() {
+  var subtitles = [
+  'Вы уверены, что хотите отменить? – Да / Нет / Отмена', 
+  'Select purchase to purchase for $0.00 – PURCHASE / CANCEL', 
+  'Это не текст, это ссылка. Не нажимайте на ссылку.',
+  'Не обновляйте эту страницу! Не нажимайте НАЗАД',
+  'Произошла ошибка OK',
+  'Пароль должен содержать заглавную букву и специальный символ'
+  ];
+  var subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
+  var div = document.getElementById('site_subtitle');
+  div.innerHTML = subtitle;
+}"}}]]])
 
 (rum/defc index [posts]
   (page "Ворчание ягнят"
@@ -44,6 +79,7 @@
   (str "<!DOCTYPE html>\n" (rum/render-static-markup component)))
 
 (cj/defroutes routes
+  (cjr/resources "/i" {:root "public/i"})
   (cj/GET "/" [:as req]
     {:body (rum/render-static-markup (index posts))})
   (cj/GET "/write" [:as req]
