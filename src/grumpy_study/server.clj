@@ -1,22 +1,17 @@
 (ns grumpy-study.server
   (:require
    [rum.core :as rum]
+   [clojure.edn :as edn]
    [immutant.web :as web]
    [compojure.core :as cj]
+   [clojure.java.io :as io]
    [compojure.route :as cjr])
   (:import
    [org.joda.time DateTime]
    [org.joda.time.format DateTimeFormat]))
 
-(def posts
-  [{:id "1"
-    :created #inst "2017-08-30"
-    :author "nikitonskiy"
-    :body "some body"}
-   {:id "2"
-    :created #inst "2017-08-29"
-    :author "freetonik"
-    :body "some body 2"}])
+(def styles (slurp (io/resource "style.css")))
+(def script (slurp (io/resource "script.js")))
 
 (def date-formatter (DateTimeFormat/forPattern "dd.MM.YYYY"))
 
@@ -37,6 +32,7 @@
     [:meta {:http-equiv "Content-Type" :content "text-html; charset=UTF-8"}]
     [:title title]
     [:meta {:name "viewport" :content "width=device-width, initial-scale=1.0"}]]
+   [:style {:dangerouslySetInnerHTML {:__html styles}}]
    [:body
     [:header
      [:h1 "Ворчание ягнят"]
@@ -49,39 +45,26 @@
      ". 2019. All rights retarded"
      [:br]
      [:a {:href "/feed" :rel "alternate" :type "application/rss+xml"} "RSS"]]
-    [:script {:dangerouslySetInnerHTML {:__html
-                                        "
-window.onload = function() {
-  reloadSubtitle();
-  document.getElementById('site_subtitle').onclick = reloadSubtitle;
-}
+    [:script {:dangerouslySetInnerHTML {:__html script}}]]])
 
-function reloadSubtitle() {
-  var subtitles = [
-  'Вы уверены, что хотите отменить? – Да / Нет / Отмена', 
-  'Select purchase to purchase for $0.00 – PURCHASE / CANCEL', 
-  'Это не текст, это ссылка. Не нажимайте на ссылку.',
-  'Не обновляйте эту страницу! Не нажимайте НАЗАД',
-  'Произошла ошибка OK',
-  'Пароль должен содержать заглавную букву и специальный символ'
-  ];
-  var subtitle = subtitles[Math.floor(Math.random() * subtitles.length)];
-  var div = document.getElementById('site_subtitle');
-  div.innerHTML = subtitle;
-}"}}]]])
-
-(rum/defc index [posts]
+(rum/defc index [post-ids]
   (page "Ворчание ягнят"
-        (for [p posts]
+        (for [post-id post-ids
+              :let [path (str "posts/" post-id "/post.edn")
+                    p    (-> (io/file path)
+                             (slurp)
+                             (edn/read-string))]]
           (post p))))
+
+(def post-ids ["123" "456"])
 
 (defn render-html [component]
   (str "<!DOCTYPE html>\n" (rum/render-static-markup component)))
 
 (cj/defroutes routes
   (cjr/resources "/i" {:root "public/i"})
-  (cj/GET "/" [:as req]
-    {:body (rum/render-static-markup (index posts))})
+  (cj/GET "/" []
+    {:body (render-html (index post-ids))})
   (cj/GET "/write" [:as req]
     {:body "WRITE"})
   (cj/POST "/write" [:as req]

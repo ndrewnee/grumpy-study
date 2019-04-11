@@ -1,0 +1,5 @@
+{:id "123"
+ :created #inst "2017-08-30"
+ :author "nikitonsky"
+ :body "some body"
+ :pictures "shop.jpg"}
