@@ -10,4 +10,10 @@
                  [compojure "1.6.1"]
                  [rum "0.11.3"]]
   :repl-options {:init-ns grumpy-study.server}
-  :main "grumpy-study.server")
+  :main grumpy-study.server
+  :profiles {
+    :uberjar {
+      :aot [grumpy-study.server]
+      :uberjar-name "grumpy-study.jar"
+    }
+  })
