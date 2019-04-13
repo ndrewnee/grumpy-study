@@ -9,4 +9,5 @@
                  [org.immutant/web "2.1.10"]
                  [compojure "1.6.1"]
                  [rum "0.11.3"]]
-  :repl-options {:init-ns grumpy-study.server})
+  :repl-options {:init-ns grumpy-study.server}
+  :main "grumpy-study.server")
