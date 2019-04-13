@@ -1,11 +1,12 @@
 (ns grumpy-study.server
   (:require
    [rum.core :as rum]
-   [clojure.edn :as edn]
    [immutant.web :as web]
-   [compojure.core :as cj]
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
-   [compojure.route :as cjr])
+   [compojure.core :as compojure]
+   [compojure.route]
+   [ring.util.response])
   (:import
    [org.joda.time DateTime]
    [org.joda.time.format DateTimeFormat]))
@@ -23,6 +24,8 @@
    [:.post_sidebar
     [:img.avatar {:src (str "/i/" (:author post) ".jpg")}]]
    [:div
+    (for [name (:pictures post)]
+      [:img {:src (str "post/" (:id post) "/" name)}])
     [:p [:span.author (:author post) ": "] (:body post)]
     [:p.meta (render-date (:created post)) " // " [:a {:href (str "/post/" (:id post))} "Ссылка"]]]])
 
@@ -56,18 +59,24 @@
                              (edn/read-string))]]
           (post p))))
 
-(def post-ids ["123" "456"])
-
 (defn render-html [component]
   (str "<!DOCTYPE html>\n" (rum/render-static-markup component)))
 
-(cj/defroutes routes
-  (cjr/resources "/i" {:root "public/i"})
-  (cj/GET "/" []
-    {:body (render-html (index post-ids))})
-  (cj/GET "/write" [:as req]
+(defn post-ids []
+  (for [name (seq (.list (io/file "posts")))
+        :let [child (io/file "posts" name)]
+        :when (.isDirectory child)]
+    name))
+
+(compojure/defroutes routes
+  (compojure.route/resources "/i" {:root "public/i"})
+  (compojure/GET "/" []
+    {:body (render-html (index (post-ids)))})
+  (compojure/GET "/post/:id/:img" [id img]
+    (ring.util.response/file-response (str "posts/" id "/" img)))
+  (compojure/GET "/write" []
     {:body "WRITE"})
-  (cj/POST "/write" [:as req]
+  (compojure/POST "/write" [:as req]
     {:body "POST"}))
 
 (defn with-headers [handler headers]
