@@ -54,10 +54,16 @@
        [:a {:href "/feed" :rel "alternate" :type "application/rss+xml"} "RSS"]]
       [:script {:dangerouslySetInnerHTML {:__html script}}]]]))
 
+(defn safe-slurp [source]
+  (try
+    (slurp source)
+    (catch Exception e
+      nil)))
+
 (defn get-post [post-id]
   (let [path (str "posts/" post-id "/post.edn")]
     (-> (io/file path)
-        (slurp)
+        (safe-slurp)
         (edn/read-string))))
 
 (rum/defc index-page [post-ids]
@@ -73,7 +79,7 @@
   (let [post (get-post post-id)
         create? (nil? post)]
     (page {"title" (if create? "Создание" "Редактирование")}
-          [:form {:action (str "/post/" post-id "/submit") :method "POST"}
+          [:form {:action (str "/post/" post-id "/edit") :method "POST"}
            [:textarea.edit_post_body
             {:value (:body post "")
              :placeholder "Пиши сюда..."}]
@@ -90,10 +96,16 @@
         :when (.isDirectory child)]
     name))
 
+(defn next-post-id []
+  (str (java.util.UUID/randomUUID)))
+
 (compojure/defroutes routes
   (compojure.route/resources "/i" {:root "public/i"})
   (compojure/GET "/" []
     {:body (render-html (index-page (post-ids)))})
+  (compojure/GET "/post/new" []
+    {:status 303
+     :headers {"Location" (str "/post/" (next-post-id) "/edit")}})
   (compojure/GET "/post/:post-id" [post-id]
     {:body (render-html (post-page post-id))})
   (compojure/GET "/post/:id/:img" [id img]
