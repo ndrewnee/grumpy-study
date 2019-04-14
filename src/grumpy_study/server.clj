@@ -60,14 +60,26 @@
         (slurp)
         (edn/read-string))))
 
-(rum/defc post-page [post-id]
-  (page {}
-        (post (get-post post-id))))
-
 (rum/defc index-page [post-ids]
   (page {:index? true}
         (for [post-id post-ids]
           (post (get-post post-id)))))
+
+(rum/defc post-page [post-id]
+  (page {}
+        (post (get-post post-id))))
+
+(rum/defc edit-post-page [post-id]
+  (let [post (get-post post-id)
+        create? (nil? post)]
+    (page {"title" (if create? "Создание" "Редактирование")}
+          [:form {:action (str "/post/" post-id "/submit") :method "POST"}
+           [:textarea.edit_post_body
+            {:value (:body post "")
+             :placeholder "Пиши сюда..."}]
+           [:input.edit_post_submit
+            {:type "submit"}
+            (if create? "Создать" "Сохранить")]])))
 
 (defn render-html [component]
   (str "<!DOCTYPE html>\n" (rum/render-static-markup component)))
@@ -86,8 +98,8 @@
     {:body (render-html (post-page post-id))})
   (compojure/GET "/post/:id/:img" [id img]
     (ring.util.response/file-response (str "posts/" id "/" img)))
-  (compojure/GET "/write" []
-    {:body "WRITE"})
+  (compojure/GET "/post/:post-id/edit" [post-id]
+    {:body (render-html (edit-post-page post-id))})
   (compojure/POST "/write" [:as req]
     {:body "POST"})
   (fn [req]
