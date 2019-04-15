@@ -1,12 +1,13 @@
 (ns grumpy-study.server
   (:require
-   [rum.core :as rum]
-   [immutant.web :as web]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [compojure.core :as compojure]
    [compojure.route]
-   [ring.util.response])
+   [immutant.web :as web]
+   [ring.util.response]
+   [ring.middleware.params]
+   [rum.core :as rum])
   (:import
    [org.joda.time DateTime]
    [org.joda.time.format DateTimeFormat])
@@ -66,6 +67,14 @@
         (safe-slurp)
         (edn/read-string))))
 
+(defn next-post-id []
+  (str (java.util.UUID/randomUUID)))
+
+(defn save-post! [post]
+  (let [dir (io/file (str "posts/" (:id post)))]
+    (.mkdir dir)
+    (spit (io/file dir "post.edn") (pr-str post))))
+
 (rum/defc index-page [post-ids]
   (page {:index? true}
         (for [post-id post-ids]
@@ -82,6 +91,7 @@
           [:form {:action (str "/post/" post-id "/edit") :method "POST"}
            [:textarea.edit_post_body
             {:value (:body post "")
+             :name "body"
              :placeholder "Пиши сюда..."}]
            [:input.edit_post_submit
             {:type "submit"}
@@ -96,9 +106,6 @@
         :when (.isDirectory child)]
     name))
 
-(defn next-post-id []
-  (str (java.util.UUID/randomUUID)))
-
 (compojure/defroutes routes
   (compojure.route/resources "/i" {:root "public/i"})
   (compojure/GET "/" []
@@ -112,8 +119,14 @@
     (ring.util.response/file-response (str "posts/" id "/" img)))
   (compojure/GET "/post/:post-id/edit" [post-id]
     {:body (render-html (edit-post-page post-id))})
-  (compojure/POST "/write" [:as req]
-    {:body "POST"})
+  (compojure/POST "/post/:post-id/edit" [post-id :as req]
+    (let [params (:form-params req)
+          body (get params "body")]
+      (save-post! {:id post-id
+                   :body body
+                   :author "nikitonsky"})
+      {:status 302
+       :headers {"Location" (str "/post/" post-id)}}))
   (fn [req]
     {:status 404
      :body "404 Not Found"}))
@@ -125,6 +138,7 @@
 
 (def app
   (-> routes
+      (ring.middleware.params/wrap-params)
       (with-headers {"Content-Type" "text/html; charset=utf-8"
                      "Cache-Control" "no-cache"
                      "Expires" "-1"})))
