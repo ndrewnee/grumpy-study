@@ -7,8 +7,10 @@
    [immutant.web :as web]
    [ring.util.response]
    [ring.middleware.params]
+   [ring.middleware.multipart-params]
    [rum.core :as rum])
   (:import
+   [java.util UUID]
    [org.joda.time DateTime]
    [org.joda.time.format DateTimeFormat])
   (:gen-class))
@@ -68,12 +70,25 @@
         (edn/read-string))))
 
 (defn next-post-id []
-  (str (java.util.UUID/randomUUID)))
+  (let [uuid (UUID/randomUUID)
+        time (int (/ (System/currentTimeMillis) 1000))
+        high (.getMostSignificantBits uuid)
+        low  (.getLeastSignificantBits uuid)
+        new-high (bit-or (bit-and high 0x00000000FFFFFFFF)
+                         (bit-shift-left time 32))]
+    (str (UUID. new-high low))))
 
-(defn save-post! [post]
-  (let [dir (io/file (str "posts/" (:id post)))]
+(defn save-post! [post pictures]
+  (let [dir           (io/file (str "posts/" (:id post)))
+        picture-names (for [[picture idx] (map vector pictures (range))
+                            :let [in-name (:filename picture)
+                                  [_ ext] (re-matches #".*(\.[^\.]+)" in-name)]]
+                        (str (:id post) "_" (inc idx) ext))]
     (.mkdir dir)
-    (spit (io/file dir "post.edn") (pr-str post))))
+    (doseq [[picture name] (map vector pictures picture-names)]
+      (io/copy (:tempfile picture) (io/file dir name))
+      (.delete (:tempfile picture)))
+    (spit (io/file dir "post.edn") (pr-str (assoc post :pictures (vec picture-names))))))
 
 (rum/defc index-page [post-ids]
   (page {:index? true}
@@ -88,14 +103,20 @@
   (let [post (get-post post-id)
         create? (nil? post)]
     (page {"title" (if create? "Создание" "Редактирование")}
-          [:form {:action (str "/post/" post-id "/edit") :method "POST"}
-           [:textarea.edit_post_body
-            {:value (:body post "")
-             :name "body"
-             :placeholder "Пиши сюда..."}]
-           [:input.edit_post_submit
-            {:type "submit"}
-            (if create? "Создать" "Сохранить")]])))
+          [:form {:action (str "/post/" post-id "/edit")
+                  :method "POST"
+                  :enctype "multipart/form-data"}
+           [:.edit_post_body
+            [:textarea
+             {:value (:body post "")
+              :name "body"
+              :placeholder "Пиши сюда..."}]]
+           [:.edit_post_picture
+            [:input {:type "file" :name "picture"}]]
+           [:..edit_post_submit
+            [:input
+             {:type "submit"
+              :value (if create? "Создать" "Сохранить")}]]])))
 
 (defn render-html [component]
   (str "<!DOCTYPE html>\n" (rum/render-static-markup component)))
@@ -119,14 +140,18 @@
     (ring.util.response/file-response (str "posts/" id "/" img)))
   (compojure/GET "/post/:post-id/edit" [post-id]
     {:body (render-html (edit-post-page post-id))})
-  (compojure/POST "/post/:post-id/edit" [post-id :as req]
-    (let [params (:form-params req)
-          body (get params "body")]
-      (save-post! {:id post-id
-                   :body body
-                   :author "nikitonsky"})
-      {:status 302
-       :headers {"Location" (str "/post/" post-id)}}))
+  (ring.middleware.multipart-params/wrap-multipart-params
+   (compojure/POST "/post/:post-id/edit" [post-id :as req]
+     (let [params (:multipart-params req)
+           body (get params "body")
+           picture (:stream (get params "picture"))]
+
+       (save-post! {:id post-id
+                    :body body
+                    :author "nikitonsky"}
+                   [picture])
+       {:status 302
+        :headers {"Location" (str "/post/" post-id)}})))
   (fn [req]
     {:status 404
      :body "404 Not Found"}))
@@ -136,12 +161,24 @@
     (some-> (handler request)
             (update :headers merge headers))))
 
+(defn print-errors [handler]
+  (fn [req]
+    (try
+      (handler req)
+      (catch Exception e
+        (.printStackTrace e)
+        {:status 500
+         :headers {"Content-Type" "text/plain; charset=utf-8"}
+         :body (with-out-str
+                 (clojure.stacktrace/print-stack-trace (clojure.stacktrace/root-cause e)))}))))
+
 (def app
   (-> routes
       (ring.middleware.params/wrap-params)
       (with-headers {"Content-Type" "text/html; charset=utf-8"
                      "Cache-Control" "no-cache"
-                     "Expires" "-1"})))
+                     "Expires" "-1"})
+      (print-errors)))
 
 (defn -main [& args]
   (let [args-map (apply array-map args)
