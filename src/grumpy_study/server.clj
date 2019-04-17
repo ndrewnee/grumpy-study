@@ -144,7 +144,7 @@
    (compojure/POST "/post/:post-id/edit" [post-id :as req]
      (let [params (:multipart-params req)
            body (get params "body")
-           picture (:stream (get params "picture"))]
+           picture (get params "picture")]
 
        (save-post! {:id post-id
                     :body body
