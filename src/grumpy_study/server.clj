@@ -106,17 +106,15 @@
           [:form {:action (str "/post/" post-id "/edit")
                   :method "POST"
                   :enctype "multipart/form-data"}
+           [:.edit_post_picture
+            [:input {:type "file" :name "picture"}]]
            [:.edit_post_body
             [:textarea
              {:value (:body post "")
               :name "body"
               :placeholder "Пиши сюда..."}]]
-           [:.edit_post_picture
-            [:input {:type "file" :name "picture"}]]
            [:..edit_post_submit
-            [:input
-             {:type "submit"
-              :value (if create? "Создать" "Сохранить")}]]])))
+            [:button (if create? "Создать" "Сохранить")]]])))
 
 (defn render-html [component]
   (str "<!DOCTYPE html>\n" (rum/render-static-markup component)))
