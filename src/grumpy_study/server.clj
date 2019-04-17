@@ -1,5 +1,6 @@
 (ns grumpy-study.server
   (:require
+   [clojure.string :as str]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [compojure.core :as compojure]
@@ -23,6 +24,9 @@
 (defn render-date [inst]
   (.print date-formatter (DateTime. inst)))
 
+(defn zip [col1 col2]
+  (map vector col1 col2))
+
 (rum/defc post [post]
   [:.post
    [:.post_sidebar
@@ -30,7 +34,11 @@
    [:div
     (for [name (:pictures post)]
       [:img {:src (str "post/" (:id post) "/" name)}])
-    [:p [:span.author (:author post) ": "] (:body post)]
+    (for [[p idx] (zip (str/split (:body post) #"\n+") (range))]
+      [:p
+       (when (== 0 idx)
+         [:span.author (:author post) ": "])
+       p])
     [:p.meta (render-date (:created post)) " // " [:a {:href (str "/post/" (:id post))} "Ссылка"]]]])
 
 (rum/defc page [opts & children]
@@ -80,12 +88,12 @@
 
 (defn save-post! [post pictures]
   (let [dir           (io/file (str "posts/" (:id post)))
-        picture-names (for [[picture idx] (map vector pictures (range))
+        picture-names (for [[picture idx] (zip pictures (range))
                             :let [in-name (:filename picture)
                                   [_ ext] (re-matches #".*(\.[^\.]+)" in-name)]]
                         (str (:id post) "_" (inc idx) ext))]
     (.mkdir dir)
-    (doseq [[picture name] (map vector pictures picture-names)]
+    (doseq [[picture name] (zip pictures picture-names)]
       (io/copy (:tempfile picture) (io/file dir name))
       (.delete (:tempfile picture)))
     (spit (io/file dir "post.edn") (pr-str (assoc post :pictures (vec picture-names))))))
@@ -120,10 +128,13 @@
   (str "<!DOCTYPE html>\n" (rum/render-static-markup component)))
 
 (defn post-ids []
-  (for [name (seq (.list (io/file "posts")))
-        :let [child (io/file "posts" name)]
-        :when (.isDirectory child)]
-    name))
+  (->>
+   (for [name (seq (.list (io/file "posts")))
+         :let [child (io/file "posts" name)]
+         :when (.isDirectory child)]
+     name)
+   (sort)
+   (reverse)))
 
 (compojure/defroutes routes
   (compojure.route/resources "/i" {:root "public/i"})
