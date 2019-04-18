@@ -77,14 +77,19 @@
         (safe-slurp)
         (edn/read-string))))
 
+(def ^:const encode-table "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")
+
+(defn encode [num len]
+  (loop [num num
+         res ()
+         len len]
+    (if (== 0 len)
+      (str/join res)
+      (recur (quot num 64) (conj res (nth encode-table (rem num 64))) (dec len)))))
+
 (defn next-post-id []
-  (let [uuid (UUID/randomUUID)
-        time (int (/ (System/currentTimeMillis) 1000))
-        high (.getMostSignificantBits uuid)
-        low  (.getLeastSignificantBits uuid)
-        new-high (bit-or (bit-and high 0x00000000FFFFFFFF)
-                         (bit-shift-left time 32))]
-    (str (UUID. new-high low))))
+  (str (encode (quot (System/currentTimeMillis) 1000) 6)
+       (encode (rand-int (* 64 64 64)) 3)))
 
 (defn save-post! [post pictures]
   (let [dir           (io/file (str "posts/" (:id post)))
@@ -92,7 +97,7 @@
                             :let [in-name (:filename picture)
                                   [_ ext] (re-matches #".*(\.[^\.]+)" in-name)]]
                         (str (:id post) "_" (inc idx) ext))]
-    (.mkdir dir)
+    (.mkdirs dir)
     (doseq [[picture name] (zip pictures picture-names)]
       (io/copy (:tempfile picture) (io/file dir name))
       (.delete (:tempfile picture)))
