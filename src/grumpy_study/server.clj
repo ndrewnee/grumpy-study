@@ -3,6 +3,7 @@
    [clojure.string :as str]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.java.shell :as shell]
    [compojure.core :as compojure]
    [compojure.route]
    [immutant.web :as web]
@@ -23,6 +24,15 @@
 
 (defn render-date [inst]
   (.print date-formatter (DateTime. inst)))
+
+(defn send-mail! [{:keys [to subject body]}]
+  (println "[ Email sent ]\nTo:" to "\nSubject:" subject "\nBody:" body)
+  (shell/sh
+   "mail"
+   "-s"
+   subject
+   to
+   :in body))
 
 (defn zip [col1 col2]
   (map vector col1 col2))
